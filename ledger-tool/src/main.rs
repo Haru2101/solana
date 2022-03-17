@@ -12,6 +12,29 @@ use {
     regex::Regex,
     serde::Serialize,
     serde_json::json,
+    jsonrpc_core,
+    solana_transaction_status::{
+        BlockEncodingOptions, ConfirmedBlock, ConfirmedTransactionStatusWithSignature,
+        ConfirmedTransactionWithStatusMeta, EncodedConfirmedTransactionWithStatusMeta, Reward,
+        RewardType, TransactionBinaryEncoding, TransactionConfirmationStatus, TransactionStatus,
+        UiConfirmedBlock, UiTransactionEncoding,TransactionDetails,
+    },
+    solana_client::{
+
+        rpc_cache::LargestAccountsCache,
+        rpc_config::*,
+        rpc_custom_error::RpcCustomError,
+        rpc_deprecated_config::*,
+        rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
+        rpc_request::{
+            TokenAccountsFilter, DELINQUENT_VALIDATOR_SLOT_DISTANCE,
+            MAX_GET_CONFIRMED_BLOCKS_RANGE, MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS2_LIMIT,
+            MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE, MAX_GET_PROGRAM_ACCOUNT_FILTERS,
+            MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS, MAX_GET_SLOT_LEADERS, MAX_MULTIPLE_ACCOUNTS,
+            NUM_LARGEST_ACCOUNTS,
+        },
+        rpc_response::{Response as RpcResponse, *},
+    },
     solana_clap_utils::{
         input_parsers::{cluster_type_of, pubkey_of, pubkeys_of},
         input_validators::{
@@ -268,6 +291,48 @@ fn output_slot(
     Ok(())
 }
 
+fn output_slot_v(
+    blockstore: &Blockstore,
+    slot: Slot
+)  {
+    let config = RpcBlockConfig {
+        encoding: None,
+        transaction_details: Some(TransactionDetails::Full),
+        rewards: Some(false),
+        commitment: None,
+        max_supported_transaction_version: None,
+    };
+let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Json);
+let encoding_options = BlockEncodingOptions {
+    transaction_details: config.transaction_details.unwrap_or_default(),
+    show_rewards: config.rewards.unwrap_or(true),
+    max_supported_transaction_version: config.max_supported_transaction_version,
+};
+    let result = blockstore.get_rooted_block(slot, true);
+    let encode_block = |confirmed_block: ConfirmedBlock| -> jsonrpc_core:: Result<UiConfirmedBlock> {
+        let mut encoded_block = confirmed_block
+            .encode_with_options(encoding, encoding_options)
+            .map_err(RpcCustomError::from)?;
+        if slot == 0 {
+            encoded_block.block_time = Some(0);
+            encoded_block.block_height = Some(0);
+        }
+        Ok(encoded_block)
+
+    };
+    if result.is_err() {
+        println!("")
+    }else{
+    let r = result
+    .ok()
+    .map(ConfirmedBlock::from)
+    .map(encode_block)
+    .transpose();
+    let rr = format!("{}",serde_json::to_string(&r.unwrap()).unwrap());
+    println!("{},",rr);
+    }
+}
+
 fn output_ledger(
     blockstore: Blockstore,
     starting_slot: Slot,
@@ -312,9 +377,10 @@ fn output_ledger(
             }
         }
 
-        if let Err(err) = output_slot(&blockstore, slot, allow_dead_slots, &method, verbose_level) {
-            eprintln!("{}", err);
-        }
+        // if let Err(err) = output_slot(&blockstore, slot, allow_dead_slots, &method, verbose_level) {
+        //     eprintln!("{}", err);
+        // }
+        output_slot_v(&blockstore, slot);
         num_printed += 1;
         if num_printed >= num_slots as usize {
             break;
