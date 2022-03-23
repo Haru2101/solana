@@ -1,5 +1,4 @@
 #![allow(clippy::integer_arithmetic)]
-extern crate redis;
 use {
     crate::{bigtable::*, ledger_path::*},
     clap::{
@@ -9,19 +8,19 @@ use {
     crossbeam_channel::unbounded,
     dashmap::DashMap,
     itertools::Itertools,
-    jsonrpc_core,
     log::*,
-    redis::{transaction, Commands},
     regex::Regex,
     serde::Serialize,
     serde_json::json,
-    solana_clap_utils::{
-        input_parsers::{cluster_type_of, pubkey_of, pubkeys_of},
-        input_validators::{
-            is_parsable, is_pow2, is_pubkey, is_pubkey_or_keypair, is_slot, is_valid_percentage,
-        },
+    jsonrpc_core,
+    solana_transaction_status::{
+        BlockEncodingOptions, ConfirmedBlock, ConfirmedTransactionStatusWithSignature,
+        ConfirmedTransactionWithStatusMeta, EncodedConfirmedTransactionWithStatusMeta, Reward,
+        RewardType, TransactionBinaryEncoding, TransactionConfirmationStatus, TransactionStatus,
+        UiConfirmedBlock, UiTransactionEncoding,TransactionDetails,
     },
     solana_client::{
+
         rpc_cache::LargestAccountsCache,
         rpc_config::*,
         rpc_custom_error::RpcCustomError,
@@ -35,6 +34,12 @@ use {
             NUM_LARGEST_ACCOUNTS,
         },
         rpc_response::{Response as RpcResponse, *},
+    },
+    solana_clap_utils::{
+        input_parsers::{cluster_type_of, pubkey_of, pubkeys_of},
+        input_validators::{
+            is_parsable, is_pow2, is_pubkey, is_pubkey_or_keypair, is_slot, is_valid_percentage,
+        },
     },
     solana_core::system_monitor_service::SystemMonitorService,
     solana_entry::entry::Entry,
@@ -83,12 +88,6 @@ use {
     },
     solana_stake_program::stake_state::{self, PointValue},
     solana_transaction_status::VersionedTransactionWithStatusMeta,
-    solana_transaction_status::{
-        BlockEncodingOptions, ConfirmedBlock, ConfirmedTransactionStatusWithSignature,
-        ConfirmedTransactionWithStatusMeta, EncodedConfirmedTransactionWithStatusMeta, Reward,
-        RewardType, TransactionBinaryEncoding, TransactionConfirmationStatus, TransactionDetails,
-        TransactionStatus, UiConfirmedBlock, UiTransactionEncoding,
-    },
     solana_vote_program::{
         self,
         vote_state::{self, VoteState},
@@ -292,12 +291,10 @@ fn output_slot(
     Ok(())
 }
 
-struct SlotHash {
-    slot: String,
-    hash: String,
-}
-
-fn output_slot_to_redis(blockstore: &Blockstore, slot: Slot) -> SlotHash {
+fn output_slot_v(
+    blockstore: &Blockstore,
+    slot: Slot
+)  {
     let config = RpcBlockConfig {
         encoding: None,
         transaction_details: Some(TransactionDetails::Full),
@@ -305,14 +302,14 @@ fn output_slot_to_redis(blockstore: &Blockstore, slot: Slot) -> SlotHash {
         commitment: None,
         max_supported_transaction_version: None,
     };
-    let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Json);
-    let encoding_options = BlockEncodingOptions {
-        transaction_details: config.transaction_details.unwrap_or_default(),
-        show_rewards: config.rewards.unwrap_or(true),
-        max_supported_transaction_version: config.max_supported_transaction_version,
-    };
+let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Json);
+let encoding_options = BlockEncodingOptions {
+    transaction_details: config.transaction_details.unwrap_or_default(),
+    show_rewards: config.rewards.unwrap_or(true),
+    max_supported_transaction_version: config.max_supported_transaction_version,
+};
     let result = blockstore.get_rooted_block(slot, true);
-    let encode_block = |confirmed_block: ConfirmedBlock| -> jsonrpc_core::Result<UiConfirmedBlock> {
+    let encode_block = |confirmed_block: ConfirmedBlock| -> jsonrpc_core:: Result<UiConfirmedBlock> {
         let mut encoded_block = confirmed_block
             .encode_with_options(encoding, encoding_options)
             .map_err(RpcCustomError::from)?;
@@ -321,26 +318,18 @@ fn output_slot_to_redis(blockstore: &Blockstore, slot: Slot) -> SlotHash {
             encoded_block.block_height = Some(0);
         }
         Ok(encoded_block)
+
     };
     if result.is_err() {
-        return SlotHash {
-            slot: "emptyslot".into(),
-            hash: " ".into(),
-        };
-    } else {
-        // let r = result
-        // .ok()
-        // .map(ConfirmedBlock::from)
-        // .map(encode_block)
-        // .transpose();
-        // let rr = format!("{}",serde_json::to_string(&r.unwrap()).unwrap());
-        // println!("{},",rr);
-        let hash_s = result.ok().unwrap().blockhash;
-        let slot_s = slot.to_string();
-        return SlotHash {
-            slot: slot_s,
-            hash: hash_s,
-        };
+        println!("")
+    }else{
+    let r = result
+    .ok()
+    .map(ConfirmedBlock::from)
+    .map(encode_block)
+    .transpose();
+    let rr = format!("{}",serde_json::to_string(&r.unwrap()).unwrap());
+    println!("{},",rr);
     }
 }
 
@@ -370,8 +359,6 @@ fn output_ledger(
 
     let num_slots = num_slots.unwrap_or(Slot::MAX);
     let mut num_printed = 0;
-    // let client = redis::Client::open("redis://127.0.0.1:").ok().unwrap();
-    // let mut con = client.get_connection().ok().unwrap();
     for (slot, slot_meta) in slot_iterator {
         if only_rooted && !blockstore.is_root(slot) {
             continue;
@@ -380,26 +367,20 @@ fn output_ledger(
             break;
         }
 
-        // match method {
-        //     LedgerOutputMethod::Print => {
-        //         println!("Slot {} root?: {}", slot, blockstore.is_root(slot))
-        //     }
-        //     LedgerOutputMethod::Json => {
-        //         serde_json::to_writer(stdout(), &slot_meta).expect("serialize slot_meta");
-        //         stdout().write_all(b",\n").expect("newline");
-        //     }
-        // }
+        match method {
+            LedgerOutputMethod::Print => {
+                println!("Slot {} root?: {}", slot, blockstore.is_root(slot))
+            }
+            LedgerOutputMethod::Json => {
+                serde_json::to_writer(stdout(), &slot_meta).expect("serialize slot_meta");
+                stdout().write_all(b",\n").expect("newline");
+            }
+        }
 
         // if let Err(err) = output_slot(&blockstore, slot, allow_dead_slots, &method, verbose_level) {
         //     eprintln!("{}", err);
         // }
-        let r = output_slot_to_redis(&blockstore, slot);
-        Command::new("redis-cli")
-            .arg("SET")
-            .arg(r.slot)
-            .arg(r.hash)
-            .output()
-            .expect("failed");
+        output_slot_v(&blockstore, slot);
         num_printed += 1;
         if num_printed >= num_slots as usize {
             break;
