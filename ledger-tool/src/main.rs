@@ -391,7 +391,7 @@ fn output_ledger(
         //         serde_json::to_writer(stdout(), &slot_meta).expect("serialize slot_meta");
         //         stdout().write_all(b",\n").expect("newline");
         //     }
-        // 
+        //
 
         // if let Err(err) = output_slot(&blockstore, slot, allow_dead_slots, &method, verbose_level) {
         //     eprintln!("{}", err);
@@ -399,9 +399,10 @@ fn output_ledger(
         let sh = output_slothash(&blockstore, slot);
         pipe.cmd("SET").arg(sh.slot).arg(sh.hash).ignore();
         num_printed += 1;
-        
-        if num_printed % 100 == 0{
+
+        if num_printed % 100 == 0 {
             pipe.execute(&mut conn);
+            pipe = redis::pipe();
         }
 
         if num_printed >= num_slots as usize {
