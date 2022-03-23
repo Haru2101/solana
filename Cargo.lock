@@ -730,6 +730,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "combine"
+version = "4.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "50b727aacc797f9fc28e355d21f34709ac4fc9adecfe470ad07b8f4464f53062"
+dependencies = [
+ "bytes",
+ "memchr",
+]
+
+[[package]]
 name = "console"
 version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1165,6 +1175,12 @@ name = "doc-comment"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fea41bba32d969b513997752735605054bc0dfa92b4c56bf1189f2e174be7a10"
+
+[[package]]
+name = "dtoa"
+version = "0.4.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "56899898ce76aaf4a0f24d914c97ea6ed976d42fec6ad33fcbb0a1103e07b2b0"
 
 [[package]]
 name = "ed25519"
@@ -3507,6 +3523,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "redis"
+version = "0.21.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1a80b5f38d7f5a020856a0e16e40a9cfabf88ae8f0e4c2dcd8a3114c1e470852"
+dependencies = [
+ "async-trait",
+ "combine 4.6.3",
+ "dtoa",
+ "itoa 0.4.8",
+ "percent-encoding 2.1.0",
+ "sha1",
+ "url 2.2.2",
+]
+
+[[package]]
 name = "redox_syscall"
 version = "0.2.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5113,6 +5144,7 @@ dependencies = [
  "itertools 0.10.3",
  "jsonrpc-core",
  "log",
+ "redis",
  "regex",
  "serde",
  "serde_json",
@@ -6163,7 +6195,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "41e138f6d6d4eb6a65f8e9f01ca620bc9907d79648d5038a69dd3f07b6ed3f1f"
 dependencies = [
  "byteorder",
- "combine",
+ "combine 3.8.1",
  "goblin",
  "hash32",
  "libc",

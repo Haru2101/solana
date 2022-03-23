@@ -1,4 +1,5 @@
 #![allow(clippy::integer_arithmetic)]
+extern crate redis;
 use {
     crate::{bigtable::*, ledger_path::*},
     clap::{
@@ -10,6 +11,7 @@ use {
     itertools::Itertools,
     jsonrpc_core,
     log::*,
+    redis::Commands,
     regex::Regex,
     serde::Serialize,
     serde_json::json,
@@ -370,6 +372,9 @@ fn output_ledger(
 
     let num_slots = num_slots.unwrap_or(Slot::MAX);
     let mut num_printed = 0;
+    let client = redis::Client::open("redis://127.0.0.1/").unwrap();
+    let mut conn = client.get_connection().unwrap();
+    let mut pipe = redis::pipe();
     for (slot, slot_meta) in slot_iterator {
         if only_rooted && !blockstore.is_root(slot) {
             continue;
@@ -378,30 +383,36 @@ fn output_ledger(
             break;
         }
 
-        match method {
-            LedgerOutputMethod::Print => {
-                println!("Slot {} root?: {}", slot, blockstore.is_root(slot))
-            }
-            LedgerOutputMethod::Json => {
-                serde_json::to_writer(stdout(), &slot_meta).expect("serialize slot_meta");
-                stdout().write_all(b",\n").expect("newline");
-            }
-        }
+        // match method {
+        //     LedgerOutputMethod::Print => {
+        //         println!("Slot {} root?: {}", slot, blockstore.is_root(slot))
+        //     }
+        //     LedgerOutputMethod::Json => {
+        //         serde_json::to_writer(stdout(), &slot_meta).expect("serialize slot_meta");
+        //         stdout().write_all(b",\n").expect("newline");
+        //     }
+        // 
 
         // if let Err(err) = output_slot(&blockstore, slot, allow_dead_slots, &method, verbose_level) {
         //     eprintln!("{}", err);
         // }
         let sh = output_slothash(&blockstore, slot);
-        Command::new("redis-cli").arg("SET").arg(sh.slot).arg(sh.hash).output().expect("faild");
+        pipe.cmd("SET").arg(sh.slot).arg(sh.hash).ignore();
         num_printed += 1;
+        
+        if num_printed % 100 == 0{
+            pipe.execute(&mut conn);
+        }
+
         if num_printed >= num_slots as usize {
+            pipe.execute(&mut conn);
             break;
         }
     }
 
-    if method == LedgerOutputMethod::Json {
-        stdout().write_all(b"\n]}\n").expect("close array");
-    }
+    // if method == LedgerOutputMethod::Json {
+    //     stdout().write_all(b"\n]}\n").expect("close array");
+    // }
 }
 
 fn render_dot(dot: String, output_file: &str, output_format: &str) -> io::Result<()> {
