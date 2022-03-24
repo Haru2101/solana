@@ -324,9 +324,10 @@ fn output_slothash(blockstore: &Blockstore, slot: Slot) -> SlotHash {
     };
     if result.is_err() {
         // println!("")
+        let slot_empty = format!("{}{}",slot,"_empty");
         return SlotHash {
-            slot: "empty".into(),
-            hash: " ".into(),
+            slot: slot_empty,
+            hash: "".into(),
         };
     } else {
         // let r = result
